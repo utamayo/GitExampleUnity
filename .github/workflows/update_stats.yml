@@ -2,7 +2,7 @@ name: Actualizar estadísticas diarias
 
 on:
   schedule:
-    - cron: "0 8 * * *"  # Ejecutar cada medianoche
+    - cron: "0 8 * * *"  # Ejecutar cada medianoche (UTC)
   workflow_dispatch:
 
 jobs:
@@ -15,10 +15,13 @@ jobs:
 
       - name: Instalar dependencias
         run: |
+          sudo apt-get update
           sudo apt-get install -y jq
           pip install matplotlib
 
       - name: Ejecutar scripts de estadísticas
+        env:
+          GH_TOKEN: ${{ github.token }}   # 👈 Permite a gh autenticarse
         run: |
           bash stats/git_stats.sh
           python3 stats/generate_graphs.py
