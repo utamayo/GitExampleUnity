@@ -1,10 +1,11 @@
 #!/bin/bash
 # stats/scripts/git_stats.sh
 # Genera estadísticas completas de commits e issues (por usuario o globales)
-# y las guarda en stats/stats.md
+# y las guarda en stats/stats.md + exporta datos a stats/data.json
 
-OUTPUT_FILE="stats.md"
+OUTPUT_FILE="stats/stats.md"
 PLOTS_DIR="stats/plots"
+DATA_FILE="stats/data.json"
 TARGET_USER=$1
 
 mkdir -p "$PLOTS_DIR"
@@ -15,7 +16,7 @@ GREEN='\033[0;32m'
 BLUE='\033[1;34m'
 RESET='\033[0m'
 
-# Encabezado
+# Encabezado del informe Markdown
 {
 echo "# 📊 Estadísticas del Repositorio"
 echo
@@ -48,7 +49,46 @@ for branch in $(git branch -r | grep -v HEAD); do
   echo >> "$OUTPUT_FILE"
 done
 
-# --- ISSUES ---
+# --- Exportar datos JSON para gráficos ---
+echo "{" > "$DATA_FILE"
+
+# Commits por rama
+echo '  "commits_by_branch": {' >> "$DATA_FILE"
+first=true
+for branch in $(git branch -r | grep -v HEAD); do
+  count=$(git rev-list --no-merges --count $branch)
+  if [ "$first" = true ]; then
+    first=false
+  else
+    echo "," >> "$DATA_FILE"
+  fi
+  echo -n "    \"${branch#origin/}\": $count" >> "$DATA_FILE"
+done
+echo "  }," >> "$DATA_FILE"
+
+# Issues por usuario (si gh disponible)
+if command -v gh &>/dev/null; then
+  echo '  "issues_by_user": {' >> "$DATA_FILE"
+  first=true
+  users=$(gh issue list --json assignees | jq -r '.[] | .assignees[].login' | sort | uniq)
+  for user in $users; do
+    open=$(gh issue list --assignee "$user" --state open --json number | jq length)
+    closed=$(gh issue list --assignee "$user" --state closed --json number | jq length)
+    if [ "$first" = true ]; then
+      first=false
+    else
+      echo "," >> "$DATA_FILE"
+    fi
+    echo -n "    \"$user\": [$open, $closed]" >> "$DATA_FILE"
+  done
+  echo "  }" >> "$DATA_FILE"
+else
+  echo '  "issues_by_user": {}' >> "$DATA_FILE"
+fi
+
+echo "}" >> "$DATA_FILE"
+
+# --- ISSUES (detalle en Markdown) ---
 if command -v gh &>/dev/null; then
   echo "## 🐙 Issues (GitHub CLI)" >> "$OUTPUT_FILE"
   if [ -z "$TARGET_USER" ]; then
@@ -71,6 +111,7 @@ else
   echo "_⚠️ GitHub CLI (gh) no está instalado. No se pueden consultar issues._" >> "$OUTPUT_FILE"
 fi
 
+# Enlazamos los gráficos
 echo >> "$OUTPUT_FILE"
 echo "![Commits por rama](plots/commits_per_branch.png)" >> "$OUTPUT_FILE"
 echo "![Issues por usuario](plots/issues_by_user.png)" >> "$OUTPUT_FILE"
