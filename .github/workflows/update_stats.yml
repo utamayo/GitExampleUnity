@@ -1,0 +1,35 @@
+name: Actualizar estadísticas diarias
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Se ejecuta todos los días a la medianoche
+  workflow_dispatch:  # Permite ejecutar manualmente
+
+jobs:
+  update_stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Configurar entorno Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Instalar dependencias
+        run: |
+          pip install matplotlib jq
+
+      - name: Ejecutar script de estadísticas
+        run: |
+          ./stats/git_stats.sh > stats/stats.md
+          python3 stats/generate_graphs.py
+
+      - name: Subir cambios al repositorio
+        uses: EndBug/add-and-commit@v7
+        with:
+          author_name: "GitHub Actions"
+          author_email: "actions@github.com"
+          message: "Actualizar estadísticas diarias"
+          add: "stats/stats.md stats/plots/*"
