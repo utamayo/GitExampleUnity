@@ -1,74 +1,76 @@
 #!/bin/bash
-# git_stats.sh
-# Muestra estadísticas completas de commits y issues por usuario o globales
+# stats/scripts/git_stats.sh
+# Genera estadísticas completas de commits e issues (por usuario o globales)
+# y las guarda en stats/stats.md
 
-# Colores
+OUTPUT_FILE="stats.md"
+PLOTS_DIR="stats/plots"
+TARGET_USER=$1
+
+mkdir -p "$PLOTS_DIR"
+
+# Colores (solo para salida local)
 YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 BLUE='\033[1;34m'
-CYAN='\033[0;36m'
-MAGENTA='\033[1;35m'
 RESET='\033[0m'
 
-# Usuario objetivo (opcional)
-TARGET_USER=$1
+# Encabezado
+{
+echo "# 📊 Estadísticas del Repositorio"
+echo
+echo "_Última actualización: $(date '+%Y-%m-%d %H:%M:%S')_"
+echo
+} > "$OUTPUT_FILE"
 
-# Archivo de salida
-OUTPUT_FILE="stats/stats.md"
-
-# Si no hay usuario, mostrar top global
+# --- TOP AUTORES ---
 if [ -z "$TARGET_USER" ]; then
-  echo -e "${BLUE}===========================================" >> $OUTPUT_FILE
-  echo -e "   👥 TOP AUTORES (TODAS LAS RAMAS)" >> $OUTPUT_FILE
-  echo -e "===========================================" >> $OUTPUT_FILE
+  echo "## 👥 Top autores (todas las ramas)" >> "$OUTPUT_FILE"
   git shortlog --summary --numbered --all --no-merges |
-    awk -v magenta="$MAGENTA" -v green="$GREEN" -v reset="$RESET" '{print magenta $1 reset " " green substr($0, index($0,$2)) reset}' >> $OUTPUT_FILE
-  echo >> $OUTPUT_FILE
+    awk '{printf "%s %s\n", $1, substr($0, index($0,$2))}' |
+    awk '{print "- **"$2"**: "$1" commits"}' >> "$OUTPUT_FILE"
+  echo >> "$OUTPUT_FILE"
 fi
 
-echo -e "${BLUE}===========================================" >> $OUTPUT_FILE
-echo -e "   📊 COMMITS POR RAMA" >> $OUTPUT_FILE
-echo -e "===========================================" >> $OUTPUT_FILE
-echo >> $OUTPUT_FILE
+# --- COMMITS POR RAMA ---
+echo "## 🌿 Commits por rama" >> "$OUTPUT_FILE"
+echo >> "$OUTPUT_FILE"
 
-# Listar ramas remotas (excluyendo HEAD)
 for branch in $(git branch -r | grep -v HEAD); do
-  echo -e "${YELLOW}--- $branch ---${RESET}" >> $OUTPUT_FILE
+  echo "### $branch" >> "$OUTPUT_FILE"
   if [ -z "$TARGET_USER" ]; then
     git shortlog --summary --numbered --no-merges $branch |
-      awk -v cyan="$CYAN" -v green="$GREEN" -v reset="$RESET" '{print cyan $1 reset " " green substr($0, index($0,$2)) reset}' >> $OUTPUT_FILE
+      awk '{print "- **"$2"**: "$1" commits"}' >> "$OUTPUT_FILE"
   else
-    echo -e "${CYAN}Commits de $TARGET_USER:${RESET}" >> $OUTPUT_FILE
-    git log $branch --no-merges --author="$TARGET_USER" --pretty=oneline | wc -l | xargs echo "Total commits:" >> $OUTPUT_FILE
+    count=$(git log $branch --no-merges --author="$TARGET_USER" --pretty=oneline | wc -l)
+    echo "- $TARGET_USER: $count commits" >> "$OUTPUT_FILE"
   fi
-  echo >> $OUTPUT_FILE
+  echo >> "$OUTPUT_FILE"
 done
 
-# Verificar si gh está disponible
+# --- ISSUES ---
 if command -v gh &>/dev/null; then
-  echo -e "${BLUE}===========================================" >> $OUTPUT_FILE
-  echo -e "   🐙 ISSUES (GITHUB CLI)" >> $OUTPUT_FILE
-  echo -e "===========================================" >> $OUTPUT_FILE
-
+  echo "## 🐙 Issues (GitHub CLI)" >> "$OUTPUT_FILE"
   if [ -z "$TARGET_USER" ]; then
-    echo -e "${CYAN}Usuarios con issues asignadas:${RESET}" >> $OUTPUT_FILE
     users=$(gh issue list --json assignees | jq -r '.[] | .assignees[].login' | sort | uniq)
     if [ -z "$users" ]; then
-      echo -e "${YELLOW}No hay issues asignadas a usuarios.${RESET}" >> $OUTPUT_FILE
+      echo "_No hay issues asignadas a usuarios._" >> "$OUTPUT_FILE"
     else
       for user in $users; do
         open=$(gh issue list --assignee "$user" --state open --json number | jq length)
         closed=$(gh issue list --assignee "$user" --state closed --json number | jq length)
-        echo -e "${GREEN}$user${RESET} → Abiertas: ${YELLOW}$open${RESET} | Cerradas: ${CYAN}$closed${RESET}" >> $OUTPUT_FILE
+        echo "- **$user** → Abiertas: $open | Cerradas: $closed" >> "$OUTPUT_FILE"
       done
     fi
   else
-    echo -e "${CYAN}Issues de $TARGET_USER:${RESET}" >> $OUTPUT_FILE
     open=$(gh issue list --assignee "$TARGET_USER" --state open --json number | jq length)
     closed=$(gh issue list --assignee "$TARGET_USER" --state closed --json number | jq length)
-    echo -e "${GREEN}$TARGET_USER${RESET} → Abiertas: ${YELLOW}$open${RESET} | Cerradas: ${CYAN}$closed${RESET}" >> $OUTPUT_FILE
+    echo "- **$TARGET_USER** → Abiertas: $open | Cerradas: $closed" >> "$OUTPUT_FILE"
   fi
 else
-  echo -e "${YELLOW}⚠️ GitHub CLI (gh) no está instalado. No se pueden consultar issues.${RESET}" >> $OUTPUT_FILE
-  echo "Instálalo con: https://cli.github.com/" >> $OUTPUT_FILE
+  echo "_⚠️ GitHub CLI (gh) no está instalado. No se pueden consultar issues._" >> "$OUTPUT_FILE"
 fi
+
+echo >> "$OUTPUT_FILE"
+echo "![Commits por rama](plots/commits_per_branch.png)" >> "$OUTPUT_FILE"
+echo "![Issues por usuario](plots/issues_by_user.png)" >> "$OUTPUT_FILE"
