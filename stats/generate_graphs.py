@@ -2,27 +2,28 @@
 """
 stats/scripts/generate_graphs.py
 
-Genera gráficos de commits por rama e issues por usuario.
-Los datos deberían provenir del propio repositorio (por ejemplo, generados por git_stats.sh).
-Por ahora, se incluyen secciones marcadas donde puedes insertar la lectura de datos real.
+Lee stats/data.json (generado por git_stats.sh)
+y crea gráficos PNG en stats/plots/
 """
 
 import matplotlib.pyplot as plt
 import os
+import json
 
 PLOTS_DIR = "stats/plots"
+DATA_FILE = "stats/data.json"
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
-# -------------------------------------------------------------------
-# Aquí deberías cargar los datos reales desde algún archivo o fuente.
-# Por ejemplo, podrías guardar datos en JSON desde git_stats.sh y leerlos aquí.
-# Ejemplo de estructura esperada:
-# commits_by_branch = {"main": 120, "dev": 80, "feature-x": 45}
-# issues_by_user = {"alice": (5, 2), "bob": (3, 4), "carla": (10, 1)}
-# -------------------------------------------------------------------
+# Leer datos desde el JSON exportado
+if not os.path.exists(DATA_FILE):
+    print(f"⚠️ No se encontró {DATA_FILE}. No se pueden generar gráficos.")
+    exit(0)
 
-commits_by_branch = {}   # ← Reemplaza esto por tus datos reales
-issues_by_user = {}      # ← Reemplaza esto por tus datos reales
+with open(DATA_FILE, "r") as f:
+    data = json.load(f)
+
+commits_by_branch = data.get("commits_by_branch", {})
+issues_by_user = data.get("issues_by_user", {})
 
 # --- Commits por rama ---
 if commits_by_branch:
